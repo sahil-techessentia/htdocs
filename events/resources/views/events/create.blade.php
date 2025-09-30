@@ -3,6 +3,7 @@
 
 <head>
     <title>Event Management System</title>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
@@ -159,11 +160,77 @@
                 }
             });
 
-            $('#eventForm').submit(function() {
+            $('#eventForm').submit(function(e) {
+                e.preventDefault();
+                
                 if ($('.save-ticket:visible').length > 0) {
                     alert('Please save or delete all editing tickets before saving the event.');
                     return false;
                 }
+
+                // Show loading state
+                const submitBtn = $(this).find('button[type="submit"]');
+                const originalText = submitBtn.text();
+                submitBtn.prop('disabled', true).text('Saving...');
+
+                // Submit form via AJAX
+                $.ajax({
+                    url: $(this).attr('action'),
+                    method: 'POST',
+                    data: $(this).serialize(),
+                    headers: {
+                        'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                    },
+                    success: function(response) {
+                        // Show success message
+                        $('.alert-success').remove();
+                        $('#eventForm').before(`
+                            <div class="alert alert-success">
+                                ${response.message}
+                            </div>
+                        `);
+                        
+                        // Reset form
+                        $('#eventForm')[0].reset();
+                        $('#ticketTable tbody').empty();
+                        ticketCount = 0;
+                        
+                        // Scroll to top to show success message
+                        $('html, body').animate({scrollTop: 0}, 500);
+                    },
+                    error: function(xhr) {
+                        let errorMessage = 'An error occurred while saving the event.';
+                        
+                        if (xhr.responseJSON && xhr.responseJSON.errors) {
+                            const errors = xhr.responseJSON.errors;
+                            let errorList = '<ul>';
+                            for (let field in errors) {
+                                errors[field].forEach(error => {
+                                    errorList += `<li>${error}</li>`;
+                                });
+                            }
+                            errorList += '</ul>';
+                            errorMessage = errorList;
+                        } else if (xhr.responseJSON && xhr.responseJSON.message) {
+                            errorMessage = xhr.responseJSON.message;
+                        }
+                        
+                        // Show error message
+                        $('.alert-danger').remove();
+                        $('#eventForm').before(`
+                            <div class="alert alert-danger">
+                                ${errorMessage}
+                            </div>
+                        `);
+                        
+                        // Scroll to top to show error message
+                        $('html, body').animate({scrollTop: 0}, 500);
+                    },
+                    complete: function() {
+                        // Reset button state
+                        submitBtn.prop('disabled', false).text(originalText);
+                    }
+                });
             });
         });
     </script>
